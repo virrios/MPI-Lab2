@@ -64,6 +64,9 @@ broadcast_ring2(void     *buffer,
                int       root,
                MPI_Comm  comm)
 {
+
+	// HYPERCUBE
+
     MPI_Datatype datatype = MPI_INT; // Use this MPI function calls.
 
     // Implementation goes here.
@@ -106,7 +109,7 @@ broadcast_ring2(void     *buffer,
 			else{
 				//printf("myrank: %d recieved from: %d\n",myrank,partner);
 		 	   MPI_Recv(currenMessageToSend,count,datatype,partner,0,MPI_COMM_WORLD,&status);
-				printf("I HAVE Recieved:            %d from %d\n", myrank,partner);
+				//printf("I HAVE Recieved:            %d from %d\n", myrank,partner);
 				for(j = 0;j<count;j++){
 					((int *)buffer)[j] =currenMessageToSend[j];
 				} // end for
@@ -134,6 +137,7 @@ broadcast_ring3(void     *buffer,
     MPI_Datatype datatype = MPI_INT; // Use this MPI function calls.
 
     // Implementation goes here.
+	// RING 
 
     int i,powerOf2ToK,k,j, p, myrank;
     MPI_Status status;
@@ -154,14 +158,14 @@ broadcast_ring3(void     *buffer,
 
 	for(i =0;i<p-1;i++){
 		sender = i;
-		reciever = i+1 % p;
+		reciever = (i+1 )% p;
 		if(myrank ==sender){
 			MPI_Send(&currenMessageToSend,count,datatype,reciever,0,MPI_COMM_WORLD);
 			printf("I HAVE SENT:            %d to %d\n", myrank,reciever);
 		}
 		if(myrank == reciever){
 			MPI_Recv(currenMessageToSend,count,datatype,sender,0,MPI_COMM_WORLD,&status);
-			printf("I HAVE Recieved:            %d from %d\n", myrank,sender);
+			//printf("I HAVE Recieved:            %d from %d\n", myrank,sender);
 			for(j = 0;j<count;j++){
 				((int *)buffer)[j] =currenMessageToSend[j];
 			} 
@@ -172,10 +176,291 @@ broadcast_ring3(void     *buffer,
 
 	}
 
-
-
-	
 }
+
+
+
+void
+broadcast_ring4(void     *buffer,
+               int       count,
+               int       root,
+               MPI_Comm  comm)
+{
+    MPI_Datatype datatype = MPI_INT; // Use this MPI function calls.
+
+    // Implementation goes here.
+	// MESH
+
+	// if p is a square ( it has a integer root) we will use the sqrt as deciding source
+
+
+    int i,powerOf2ToK,k,j, p, myrank;
+    MPI_Status status;
+	int sender,reciever;
+    MPI_Comm_size(MPI_COMM_WORLD, &p);
+    MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
+
+
+
+	int sourceStep;
+	int rootOfP = (int) sqrt(p);
+	if (rootOfP *rootOfP ==p){
+		sourceStep = rootOfP;
+		//printf("source step: %d proccessors: %d\n",sourceStep,p); 
+	}	
+	else{
+		sourceStep = (int) sqrt(p*2);
+	//	printf("source step: %d proccessors: %d\n",sourceStep,p); 
+	}
+
+
+
+	int currenMessageToSend[count];
+	if(myrank ==0){
+
+			for(j = 0;j<count;j++){
+				currenMessageToSend[j] = ((int *)buffer)[j];
+			}
+
+	}
+	
+
+	int youAreSource =0;
+	int hasNotSendAsSource =1;
+	int hasRecieved =0;
+	int youAreRecieverFromSource=0;
+	int sourceReciever;
+	int DoneSendingToOtherSource=0;
+	int DoneRecivingFromOtherSource=0;
+	int layer,start,end;
+	
+	if(myrank ==0){
+		hasRecieved =1;
+		DoneRecivingFromOtherSource=1;
+
+	}
+
+	for(i =0;i<2;i++){ // kanske med myrank
+		
+		if((DoneSendingToOtherSource == 1 && DoneRecivingFromOtherSource==1) || (myrank % sourceStep !=0)){
+
+				layer = myrank/sourceStep;
+				start = layer*sourceStep;
+				end =  start + sourceStep-1;
+				//printf("layer: %d, start %d\n",layer,start);
+				for(k =start;k< end;k++){
+					sender = k;
+					reciever = (k+1) %p;
+					if(myrank ==sender){
+					//	MPI_Send(&currenMessageToSend,count,datatype,reciever,0,MPI_COMM_WORLD);
+					printf("I HAVE SENT(nextoNext):            %d to %d\n", myrank,reciever);
+					}
+					if(myrank == reciever){
+					//	MPI_Recv(currenMessageToSend,count,datatype,sender,0,MPI_COMM_WORLD,&status);
+						printf("I HAVE Recieved(nextonext:            %d from %d\n", myrank,sender);
+						for(j = 0;j<count;j++){
+							((int *)buffer)[j] =currenMessageToSend[j];
+						} 
+
+					}
+
+
+
+				}
+
+
+
+
+		}
+
+		else{
+			if(myrank % sourceStep ==0){        // if iam a canditade for being a source,
+				if(myrank + sourceStep< p){
+				youAreSource = 1;
+				sourceReciever = myrank + sourceStep;
+				}
+				if(hasRecieved ==0){
+				youAreRecieverFromSource=1;	
+				}
+			}
+			if( youAreSource && hasNotSendAsSource && hasRecieved){
+					//printf("hasrecieved: %d", hasRecieved);
+					//printf("iam rank: %d, sender: %d\n",myrank,sender);
+					//MPI_Send(&currenMessageToSend,count,datatype,sourceReciever,0,MPI_COMM_WORLD);
+					printf("I HAVE SENT:            %d to %d\n", myrank,sourceReciever);
+					hasNotSendAsSource =1;
+					DoneSendingToOtherSource=1;
+
+			}
+			if(youAreRecieverFromSource){
+				sender = myrank - sourceStep;
+				//printf("iam rank: %d, sender: %d\n",myrank,sender);
+				//MPI_Recv(currenMessageToSend,count,datatype,sender,0,MPI_COMM_WORLD,&status);
+				printf("I HAVE Recieved:            %d from %d\n", myrank,sender);
+				hasRecieved = 1;
+				DoneRecivingFromOtherSource=1;
+				for(j = 0;j<count;j++){
+					((int *)buffer)[j] =currenMessageToSend[j];
+				} 
+			
+
+			}
+
+
+		}// else nopt done recieving sending from source.
+
+
+
+	}//end for
+
+}
+
+
+
+void
+broadcast_ring5(void     *buffer,
+               int       count,
+               int       root,
+               MPI_Comm  comm)
+{
+    MPI_Datatype datatype = MPI_INT; // Use this MPI function calls.
+
+    // Implementation goes here.
+	// MESH
+
+	// if p is a square ( it has a integer root) we will use the sqrt as deciding source
+
+
+    int i,powerOf2ToK,k,j, p, myrank;
+    MPI_Status status;
+	int sender,reciever;
+    MPI_Comm_size(MPI_COMM_WORLD, &p);
+    MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
+
+
+
+	int sourceStep;
+	int rootOfP = (int) sqrt(p);
+	if (rootOfP *rootOfP ==p){
+		sourceStep = rootOfP;
+		//printf("source step: %d proccessors: %d\n",sourceStep,p); 
+	}	
+	else{
+		sourceStep = (int) sqrt(p*2);
+	//	printf("source step: %d proccessors: %d\n",sourceStep,p); 
+	}
+
+
+
+	int currenMessageToSend[count];
+	if(myrank ==0){
+
+			for(j = 0;j<count;j++){
+				currenMessageToSend[j] = ((int *)buffer)[j];
+			}
+
+	}
+	
+
+	int youAreSource =0;
+	int hasRecieved =0;
+	int youAreRecieverFromSource=0;
+	int sourceReciever;
+	int DoneRecivingFromOtherSource=0;
+	int layer,start,end;
+	
+	if(myrank ==0){
+		hasRecieved =1;
+		DoneRecivingFromOtherSource=1;
+
+	}
+
+
+	int specialrank1 = 1;
+	if(myrank % sourceStep ==0){ 
+
+
+		for(i =0;i<2;i++){       // if iam a canditade for being a source,
+
+		//printf(" mesh sending: myrank %d, iteration%d\n",myrank,i);
+			if(myrank + sourceStep< p){
+				youAreSource = 1;
+				sourceReciever = myrank + sourceStep;
+			}			
+			if(hasRecieved ==0){
+				youAreRecieverFromSource=1;	
+			}
+			if( youAreSource &&  hasRecieved && specialrank1){
+					//printf("hasrecieved: %d\n", hasRecieved);
+					//printf("iam rank: %d, sender: %d\n",myrank,sender);
+					MPI_Send(&currenMessageToSend,count,datatype,sourceReciever,0,MPI_COMM_WORLD);
+					if(EXTRA_DEBUG){
+						printf("I HAVE SENT:            %d to %d\n", myrank,sourceReciever);
+					}
+					if(myrank ==0){
+						specialrank1=0;
+					}
+
+			}
+			if(youAreRecieverFromSource){
+				sender = myrank - sourceStep;
+				//printf("iam rank: %d, sender: %d\n",myrank,sender);
+				MPI_Recv(currenMessageToSend,count,datatype,sender,0,MPI_COMM_WORLD,&status);
+			//	printf("I HAVE Recieved:            %d from %d\n", myrank,sender);
+				hasRecieved = 1;
+				youAreRecieverFromSource=0;
+				DoneRecivingFromOtherSource=1;
+				for(j = 0;j<count;j++){
+					((int *)buffer)[j] =currenMessageToSend[j];
+				} 
+			
+
+			}
+
+
+		}
+	
+	}
+
+
+	layer = myrank/sourceStep;
+	start = layer*sourceStep;
+	end =  start + sourceStep-1;
+	//printf("layer: %d, start %d\n",layer,start);
+	for(k =start;k< end;k++){
+		//printf(" ring sending: myrank %d, iteration%d start: %d end: %d\n",myrank,k,start,end);
+		sender = k;
+		reciever = (k+1) %p;
+		//printf("recieever::::::: %d\n",reciever);
+		if(myrank ==sender && (reciever<(layer+1)*sourceStep) && (reciever != 0) ){
+
+			//printf("hasrecieved: %d\n", hasRecieved);
+			//printf("iam rank: %d, sender: %d\n",myrank,sender);
+
+			MPI_Send(&currenMessageToSend,count,datatype,reciever,0,MPI_COMM_WORLD);
+			if(EXTRA_DEBUG){
+				printf("I HAVE SENT(nextoNext):            %d to %d\n", myrank,reciever);
+			}
+		}
+		if(myrank == reciever && (reciever%sourceStep!=0)){
+
+
+		//	printf("iam rank: %d, sender: %d\n",myrank,sender);
+			MPI_Recv(currenMessageToSend,count,datatype,sender,0,MPI_COMM_WORLD,&status);
+			//printf("I HAVE Recieved(nextonext:            %d from %d\n", myrank,sender);
+			for(j = 0;j<count;j++){
+				((int *)buffer)[j] =currenMessageToSend[j];
+			} 
+		}
+
+	}
+
+}
+
+
+
+
+
 
 void
 broadcast_mesh(void     *buffer,
@@ -232,7 +517,9 @@ int main(int argc, char *argv[])
            // MPI_Bcast(message, cur_msg_len, MPI_INT, 0, MPI_COMM_WORLD);
            // broadcast_ring(message, cur_msg_len, 0, MPI_COMM_WORLD);
             //broadcast_ring2(message, cur_msg_len, 0, MPI_COMM_WORLD);
-            broadcast_ring3(message, cur_msg_len, 0, MPI_COMM_WORLD);
+            //broadcast_ring3(message, cur_msg_len, 0, MPI_COMM_WORLD);
+           // broadcast_ring4(message, cur_msg_len, 0, MPI_COMM_WORLD);
+            broadcast_ring5(message, cur_msg_len, 0, MPI_COMM_WORLD);
             // broadcast_mesh(message, cur_msg_len, 0, MPI_COMM_WORLD);
             // broadcast_hypercube(message, cur_msg_len, 0, MPI_COMM_WORLD);
 			if(EXTRA_DEBUG){
@@ -261,7 +548,7 @@ int main(int argc, char *argv[])
         // print message length and time
     }
 	if(DEBUG2){
-				printf("rank: %d message: \n",myrank);
+				printf("rank: %d message:  ",myrank);
 				for(l = 0;l<max_msg_len;l++){
 					printf(" %d ",message[l]);
 
